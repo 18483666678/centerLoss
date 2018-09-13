@@ -44,6 +44,7 @@ def train(args, model, device, train_loader, optimizer, epoch):
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                        100. * batch_idx / len(train_loader), loss.item()))
+            torch.save(model.state_dict(), "train_mnist.pkl")
 
 
 def test(args, model, device, test_loader):
@@ -149,6 +150,7 @@ def main():
 
     model = Net().to(device)
     print(model)
+    model.load_state_dict(torch.load("train_mnist.pkl"))
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
 
     for epoch in range(1, args.epochs + 1):
