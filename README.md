@@ -24,8 +24,10 @@ Debug key point:
     target = torch.cat(labels, 0)
 
 3, 以下是 MNIST显示2维坐标数据 最为关键的代码 -- 需要根据labels分类将相应的点分开显示
-    for i in range(10):
-        plt.plot(center[labels == i, 0], center[labels == i, 1], ".", c=c[i])
+    color = ['C0', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9']
+    for c in range(10):
+        plt.plot(fea[c == lab, 0], fea[c == lab, 1], '.', c=color[c])
+    plt.legend(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'], loc="upper right")
 
 4, 在pytorch中 softmax 和 log_softmax 的区别？
     return F.softmax(x, dim=1)
@@ -110,3 +112,35 @@ for img, label in train_loader:
         loss.backward()
         opt.step()
 
+
+14, pytorch中pyplot 图片显示，因为数据格式为 (c, h, w)，所以显示时需要做维度变换
+（1）老土的显示方式（只能显示一张小图片）
+    for img1, label1 in test_loader:
+        plt.imshow(img1[0].view(28, 28).numpy())  # (1, 28, 28) 和 (28, 28, 1)格式图片均不能正确显示
+        plt.show()
+（2）torchvision提供了一个高级的显示方式（可以将一批数据直接显示）
+    from torchvision import utils
+    for img1, label1 in test_loader:
+        grid = utils.make_grid(img1)
+        plt.imshow(grid.numpy().transpose((1, 2, 0)))
+        plt.show()
+
+15, 通过如下方法可以打印出 网络中的参数
+(1)
+    center_loss = CenterLoss(10, 2, use_gpu=True)
+    for param in center_loss.parameters():
+        print(param)
+(2)
+    print(list(center_loss.parameters()))
+
+16, nn.Parameter() 产生一个可以被更新的矩阵变量
+    self.centers = nn.Parameter(torch.randn(num_classes, feat_dim))
+
+17, 当一个表达式较为复杂而无法直接查看其帮助信息时，可以直接写成 torch.xxx()来查看。
+    centers_batch = centers.index_select(0, label.long())
+    torch.index_select()
+    (feature - centers_batch).pow(2).sum()
+    torch.sum()
+
+18,
+    counts = counts.scatter_add_(0, label.long(), ones)
