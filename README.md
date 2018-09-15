@@ -142,5 +142,56 @@ for img, label in train_loader:
     (feature - centers_batch).pow(2).sum()
     torch.sum()
 
-18,
+18, 这个是什么东西？
     counts = counts.scatter_add_(0, label.long(), ones)
+
+19, pytorch 张量在CPU 和 GPU上切换 to(), .cuda()
+    counts = torch.histc(label.cpu(), bins=self.classes_dim, min=0, max=self.classes_dim).to("cuda")
+    self.centers = nn.Parameter(torch.randn(classes_dim, feature_dim)).to("cuda")
+
+    counts = torch.histc(label.cpu(), bins=self.classes_dim, min=0, max=self.classes_dim).cuda()
+    self.centers = nn.Parameter(torch.randn(classes_dim, feature_dim)).cuda()
+
+20, 自己实现的 center loss 算法（参考秦老师的视频），必须记录下 ^_^
+class CenterLoss(nn.Module):
+    def __init__(self, classes_dim, feature_dim, use_gpu=False):
+        super(CenterLoss, self).__init__()
+        self.classes_dim = classes_dim
+        self.feature_dim = feature_dim
+
+        self.use_gpu = use_gpu
+        if self.use_gpu:
+            self.centers = nn.Parameter(torch.randn(self.classes_dim, self.feature_dim).to("cuda"))
+        else:
+            self.centers = nn.Parameter(torch.randn(self.classes_dim, self.feature_dim))
+
+    def forward(self, feat, label):  # feat: NV , label: N , centers: CV
+        scent = self.centers.index_select(0, label)  # 选择和标签对应的 centers 条目, sCV
+        # 统计 label中相同标签出现的次数，如label: [0, 0, 1] 有2个0， 1个1, [2, 1]
+        if self.use_gpu:
+            counts = torch.histc(label.cpu().float(), bins=self.classes_dim, min=0, max=self.classes_dim).to("cuda")
+        else:
+            counts = torch.histc(label.float(), bins=self.classes_dim, min=0, max=self.classes_dim)
+        # 把统计的个数的维度变为和label相同, [2, 2, 1]
+        scounts = counts.index_select(0, label)
+        # (NV - sCV)**2 --> 分别对 V轴 (dim=1)求和 / 对应标签出现的次数 --> 开根号 --> 对所有Center loss求和
+        loss = (torch.sqrt((feat - scent).pow(2).sum(1) / scounts)).sum()
+        return loss
+
+class CenterLoss(nn.Module):
+    def __init__(self, classes_dim, feature_dim, use_gpu=False):
+        super(CenterLoss, self).__init__()
+        self.classes_dim = classes_dim
+        self.feature_dim = feature_dim
+        self.use_gpu = use_gpu
+
+        if self.use_gpu:
+            self.centers = nn.Parameter(torch.randn(self.classes_dim, self.feature_dim).to("cuda"))
+        else:
+            self.centers = nn.Parameter(torch.randn(self.classes_dim, self.feature_dim))
+
+    def forward(self, feat, label):
+        scent = self.centers.index_select(0, label)
+        distance = scent.dist(scent)
+        loss = (1.0 / 2.0 / label.size(0)) * distance
+        return loss
