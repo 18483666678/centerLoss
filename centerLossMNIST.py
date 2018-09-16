@@ -8,6 +8,45 @@ from torchvision import datasets, transforms
 import matplotlib.pyplot as plt
 
 
+class CenterLoss(nn.Module):
+
+    def __init__(self, classes_dim, feature_dim, use_gpu=False):
+        super(CenterLoss, self).__init__()
+        self.classes_dim = classes_dim
+        self.feature_dim = feature_dim
+        self.use_gpu = use_gpu
+
+        if self.use_gpu:
+            self.centers = nn.Parameter(torch.randn(classes_dim, feature_dim).to("cuda"))
+        else:
+            self.centers = nn.Parameter(torch.randn(classes_dim, feature_dim))
+
+    def forward(self, feat, label):
+        scent = self.centers.index_select(0, label)
+        # print("scent\n", scent)
+        if self.use_gpu:
+            counts = torch.histc(label.cpu().float(), bins=self.classes_dim, min=0, max=self.classes_dim).to("cuda")
+        else:
+            counts = torch.histc(label.float(), bins=self.classes_dim, min=0, max=self.classes_dim)
+        # print("counts\n", counts)
+        scounts = counts.index_select(0, label)
+        # print("scounts\n", scounts)
+        loss = ((feat - scent).pow(2).sum(1) / scounts).sum() / label.size(0)
+        return loss
+
+
+# data = torch.Tensor([[1, 2], [2, 3], [3, 6]])
+# data = torch.zeros(3, 2).to("cuda")
+# label = torch.Tensor([0, 0, 1]).to("cuda")
+#
+# center_loss = CenterLoss(10, 2, use_gpu=True)
+# print(list(center_loss.parameters()))
+# loss = center_loss(data, label)
+# print(loss)
+# print("end")
+# exit()
+
+
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
@@ -43,24 +82,27 @@ class Net(nn.Module):
         return F.log_softmax(ip2, dim=1), ip1
 
 
-def train(args, model, device, train_loader, optimizer, epoch):
+def train(args, model, device, train_loader, optimizer, epoch, center_loss, opt_closs):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
         # print(data.shape, target.shape, len(train_loader))
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
-        output, _ = model(data)
-        loss = F.nll_loss(output, target)
+        opt_closs.zero_grad()
+        output, center_out = model(data)
+        loss = F.nll_loss(output, target) + center_loss(center_out, target)
+        # print(center_loss(center_out, target))
         loss.backward()
         optimizer.step()
+        opt_closs.step()
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                        100. * batch_idx / len(train_loader), loss.item()))
-            torch.save(model.state_dict(), "train_mnist.pkl")
+            # torch.save(model.state_dict(), "train_mnist.pkl")
 
 
-def test(args, model, device, test_loader):
+def test(args, model, device, test_loader, center_loss, opt_closs):
     model.eval()
     test_loss = 0
     correct = 0
@@ -72,7 +114,7 @@ def test(args, model, device, test_loader):
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
             output, center_out = model(data)
-            test_loss += F.nll_loss(output, target).item()  # sum up batch loss
+            test_loss += F.nll_loss(output, target).item() + center_loss(center_out, target)  # sum up batch loss
             pred = output.max(1, keepdim=True)[1]  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
             # print(data.shape, data[0], target.shape, target[0])
@@ -92,9 +134,9 @@ def test(args, model, device, test_loader):
 
     for i in range(10):
         plt.plot(center[labels == i, 0], center[labels == i, 1], ".", c=c[i])
-        plt.legend(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'], loc='upper right')
-        plt.pause(1)
-    # plt.legend(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'], loc='upper right')
+        # plt.legend(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'], loc='upper right')
+        # plt.pause(1)
+    plt.legend(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'], loc='upper right')
     # plt.draw()
     plt.show()
     plt.pause(1)
@@ -163,12 +205,15 @@ def main():
 
     model = Net().to(device)
     print(model)
-    model.load_state_dict(torch.load("train_mnist.pkl"))
+    # model.load_state_dict(torch.load("train_mnist.pkl"))
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
+    center_loss = CenterLoss(10, 2, use_gpu=True)
+    opt_closs = optim.Adam(center_loss.parameters(), lr=0.0001)
+    print(list(center_loss.parameters()))
 
-    for epoch in range(1, args.epochs + 1):
-        train(args, model, device, train_loader, optimizer, epoch)
-        test(args, model, device, test_loader)
+    for epoch in range(1, 10000000):
+        train(args, model, device, train_loader, optimizer, epoch, center_loss, opt_closs)
+        test(args, model, device, test_loader, center_loss, opt_closs)
 
 
 if __name__ == '__main__':
