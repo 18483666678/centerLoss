@@ -1,0 +1,9 @@
+6
+image_id x_1 y_1 width height
+aaa.jpg    72  94 221 306
+bbb.jpg   146  67 182 252
+ccc.jpg    64  93 211 292
+ddd.jpg   113 110 211 292
+eee.jpg   110 122 234 324
+fff.jpg    93  86 190 263
+
