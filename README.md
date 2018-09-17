@@ -195,3 +195,8 @@ class CenterLoss(nn.Module):
         distance = scent.dist(scent)
         loss = (1.0 / 2.0 / label.size(0)) * distance
         return loss
+
+21, 其实在pytorch中默认封装了一些常用的datasets 和 通用的datasets，可以弄懂原理后直接使用。
+    torchvision.datasets.MNIST
+    torchvision.datasets.CIFAR10
+    train_data = torchvision.datasets.ImageFolder(save_path)
