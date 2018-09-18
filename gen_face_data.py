@@ -8,7 +8,7 @@ label_path = "./person/list_bbox_celeba.txt"
 img_path = "./person"
 save_path = "../person_face"
 face_size = 64
-COUNT = 50
+COUNT = 500
 
 if __name__ == '__main__':
     print("gen %i image" % face_size)
